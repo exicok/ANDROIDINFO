@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- Compose 项目使用基础主题，实际主题由 Kotlin 代码定义 -->
-    <style name="Theme.INFO" parent="android:Theme.Material.Light.NoActionBar">
+    <style name="Theme.INFO" parent="android:Theme.Material.NoActionBar">
         <!-- 启用 Edge-to-Edge -->
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
-        <item name="android:windowLightStatusBar">true</item>
-        <item name="android:windowLightNavigationBar">true</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
     </style>
 </resources>

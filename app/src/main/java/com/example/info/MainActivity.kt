@@ -1,106 +1,100 @@
 package com.example.info
 
-import android.os.Build
+import android.content.Context
 import android.os.Bundle
+import android.view.Display
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.example.info.ui.theme.INFOTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        
+        setPreferredRefreshRate()
+        
         setContent {
             INFOTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    Greeting(
-                        name = "Android",
-                        modifier = Modifier.padding(innerPadding)
-                    )
-                }
+                MainScreen(this)
+            }
+        }
+    }
+    
+    private fun setPreferredRefreshRate() {
+        val display = windowManager.defaultDisplay
+        val supportedModes = display.supportedModes
+        
+        if (supportedModes.isNotEmpty()) {
+            val maxRefreshRateMode = supportedModes.maxByOrNull { it.refreshRate }
+            maxRefreshRateMode?.let {
+                window.attributes.preferredDisplayModeId = it.modeId
             }
         }
     }
 }
 
-
 @Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        DeviceInfoCard()
-    }
-}
+fun MainScreen(context: Context) {
+    var selectedTabIndex by rememberSaveable { mutableIntStateOf(0) }
 
-@Composable
-fun DeviceInfoCard() {
-    val androidVersion = Build.VERSION.RELEASE
-    val kernelVersion = System.getProperty("os.version", "Unknown")
-    
-    Card(
-        modifier = Modifier
-            .padding(16.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // 左边：Info图标
-            Icon(
-                imageVector = Icons.Default.Info,
-                contentDescription = "Device Info Icon",
-                modifier = Modifier.size(48.dp)
-            )
-            
-            // 间距
-            Spacer(modifier = Modifier.width(16.dp))
-            
-            // 右边：两行标签
-            Column {
-                Text(
-                    text = "Android 版本: $androidVersion",
-                    fontSize = 16.sp
-                )
-                Spacer(modifier = Modifier.padding(4.dp))
-                Text(
-                    text = "内核版本: $kernelVersion",
-                    fontSize = 16.sp
-                )
+    Scaffold(
+        bottomBar = {
+            NavigationBar {
+                Screen.entries.forEachIndexed { index, screen ->
+                    NavigationBarItem(
+                        selected = selectedTabIndex == index,
+                        onClick = { selectedTabIndex = index },
+                        icon = {
+                            Icon(
+                                imageVector = screen.icon,
+                                contentDescription = screen.title
+                            )
+                        },
+                        label = {
+                            Text(screen.title)
+                        }
+                    )
+                }
             }
+        }
+    ) { innerPadding ->
+        when (Screen.entries[selectedTabIndex]) {
+            Screen.Home -> HomeScreen(context, Modifier.padding(innerPadding))
+            Screen.Restart -> RestartScreen(context)
+            Screen.Empty -> EmptyScreen()
         }
     }
 }
 
 @Preview(showBackground = true)
 @Composable
-fun GreetingPreview() {
+fun MainScreenPreview() {
     INFOTheme {
-        DeviceInfoCard()
+        EmptyScreen()
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun MainScreenDarkPreview() {
+    INFOTheme(darkTheme = true) {
+        EmptyScreen()
     }
 }
