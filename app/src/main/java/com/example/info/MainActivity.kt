@@ -2,6 +2,7 @@ package com.example.info
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.content.res.Configuration
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
@@ -23,9 +24,20 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.example.info.ui.theme.INFOTheme
+import java.util.Locale
 
 class MainActivity : ComponentActivity() {
     private lateinit var sharedPreferences: SharedPreferences
+
+    override fun attachBaseContext(newBase: Context) {
+        val prefs = newBase.getSharedPreferences("settings", Context.MODE_PRIVATE)
+        val lang = prefs.getString("language", "zh") ?: "zh"
+        val locale = Locale(lang)
+        Locale.setDefault(locale)
+        val config = Configuration(newBase.resources.configuration)
+        config.setLocale(locale)
+        super.attachBaseContext(newBase.createConfigurationContext(config))
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -37,6 +49,9 @@ class MainActivity : ComponentActivity() {
         setContent {
             var themeMode by remember { 
                 mutableStateOf(sharedPreferences.getString("theme_mode", "System") ?: "System") 
+            }
+            var language by remember {
+                mutableStateOf(sharedPreferences.getString("language", "zh") ?: "zh")
             }
 
             val darkTheme = when (themeMode) {
@@ -52,6 +67,14 @@ class MainActivity : ComponentActivity() {
                     onThemeChange = { newMode ->
                         themeMode = newMode
                         sharedPreferences.edit().putString("theme_mode", newMode).apply()
+                    },
+                    currentLanguage = language,
+                    onLanguageChange = { newLang ->
+                        if (language != newLang) {
+                            language = newLang
+                            sharedPreferences.edit().putString("language", newLang).apply()
+                            recreate() // 重启以应用语言
+                        }
                     }
                 )
             }
@@ -75,7 +98,9 @@ class MainActivity : ComponentActivity() {
 fun MainScreen(
     context: Context,
     currentTheme: String,
-    onThemeChange: (String) -> Unit
+    onThemeChange: (String) -> Unit,
+    currentLanguage: String,
+    onLanguageChange: (String) -> Unit
 ) {
     var selectedTabIndex by rememberSaveable { mutableIntStateOf(0) }
 
@@ -106,7 +131,9 @@ fun MainScreen(
             Screen.Restart -> RestartScreen(context)
             Screen.Settings -> SettingsScreen(
                 currentTheme = currentTheme,
-                onThemeChange = onThemeChange
+                onThemeChange = onThemeChange,
+                currentLanguage = currentLanguage,
+                onLanguageChange = onLanguageChange
             )
         }
     }

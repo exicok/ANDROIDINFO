@@ -1,5 +1,6 @@
 package com.example.info
 
+import android.app.ActivityManager
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
@@ -84,53 +85,41 @@ object DeviceUtils {
         }
     }
 
-    fun getIpAddress(): String {
+    fun getSELinuxStatus(): String {
         return try {
-            val interfaces = NetworkInterface.getNetworkInterfaces()
-            var ip = "未知"
-            while (interfaces.hasMoreElements()) {
-                val networkInterface = interfaces.nextElement()
-                val addresses = networkInterface.inetAddresses
-                while (addresses.hasMoreElements()) {
-                    val address = addresses.nextElement()
-                    if (!address.isLoopbackAddress && address is Inet4Address) {
-                        ip = address.hostAddress ?: "未知"
-                        break
-                    }
-                }
-                if (ip != "未知") break
+            val process = Runtime.getRuntime().exec("getenforce")
+            val reader = BufferedReader(InputStreamReader(process.inputStream))
+            val value = reader.readLine()
+            reader.close()
+            when (value?.trim()?.lowercase(Locale.ROOT)) {
+                "enforcing" -> "强制 (Enforcing)"
+                "permissive" -> "宽容 (Permissive)"
+                "disabled" -> "禁用 (Disabled)"
+                else -> value ?: "未知"
             }
-            ip
         } catch (e: Exception) {
             "未知"
         }
     }
 
-    fun getNetworkType(context: Context): String {
-        return try {
-            val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
-            val network = connectivityManager?.activeNetwork ?: return "无网络"
-            val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return "未知"
-            when {
-                capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> "Wi-Fi"
-                capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> "移动数据"
-                capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> "以太网"
-                else -> "其他"
-            }
-        } catch (e: Exception) {
-            "未知"
-        }
+    fun getCurrentTime(): String {
+        val sdf = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+        return sdf.format(Date())
+    }
+
+    fun getCurrentDate(): String {
+        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        return sdf.format(Date())
     }
 
     fun getRootModuleCount(): Int {
         return try {
-            val modulesDir = File("/data/adb/models")
-            if (modulesDir.exists() && modulesDir.isDirectory) {
-                val modules = modulesDir.listFiles { file -> file.isDirectory }
-                modules?.size ?: 0
-            } else {
-                0
-            }
+            val process = Runtime.getRuntime().exec(arrayOf("su", "-c", "ls /data/adb/modules | wc -l"))
+            val reader = BufferedReader(InputStreamReader(process.inputStream))
+            val line = reader.readLine()
+            reader.close()
+            process.waitFor()
+            line?.trim()?.toInt() ?: 0
         } catch (e: Exception) {
             0
         }
@@ -170,12 +159,97 @@ object DeviceUtils {
         return String.format(Locale.getDefault(), "%.2f %s", bytes / Math.pow(1024.0, digitGroups.toDouble()), units[digitGroups])
     }
 
+    fun getProcessCount(): String {
+        return try {
+            val process = Runtime.getRuntime().exec(arrayOf("sh", "-c", "ps -A | wc -l"))
+            val reader = BufferedReader(InputStreamReader(process.inputStream))
+            val line = reader.readLine()
+            reader.close()
+            process.waitFor()
+            val count = line?.trim()?.toInt() ?: 0
+            if (count > 0) (count - 1).toString() else "0"
+        } catch (e: Exception) {
+            "未知"
+        }
+    }
+
+    fun getMemoryUsage(context: Context): Int {
+        val info = getMemoryInfo(context)
+        return if (info.totalMem > 0) {
+            (((info.totalMem - info.availMem).toDouble() / info.totalMem.toDouble()) * 100).toInt()
+        } else 0
+    }
+
+    fun getStorageUsagePercentage(): Int {
+        val directory = android.os.Environment.getDataDirectory()
+        val total = getTotalStorageSize(directory)
+        val used = getUsedStorageSize(directory)
+        return if (total > 0) ((used.toDouble() / total.toDouble()) * 100).toInt() else 0
+    }
+
+    fun getMemoryInfo(context: Context): ActivityManager.MemoryInfo {
+        val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+        val memoryInfo = ActivityManager.MemoryInfo()
+        activityManager.getMemoryInfo(memoryInfo)
+        return memoryInfo
+    }
+
+    fun getMemoryBrand(): String {
+        // 尝试从系统属性获取，不同 OEM 可能有不同 key
+        return getSystemProperty("ro.boot.ddr_manuf") ?: getSystemProperty("ro.boot.cpuid") ?: "未知"
+    }
+
+    fun getUfsInfo(): String {
+        return try {
+            val modelFile = File("/sys/class/scsi_host/host0/model")
+            if (modelFile.exists()) {
+                modelFile.readText().trim()
+            } else {
+                getSystemProperty("ro.boot.storage_type") ?: "未知"
+            }
+        } catch (e: Exception) {
+            "未知"
+        }
+    }
+
+    fun getSocInfo(): String {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            "${Build.SOC_MANUFACTURER} ${Build.SOC_MODEL}"
+        } else {
+            getSystemProperty("ro.board.platform") ?: Build.HARDWARE
+        }
+    }
+
     fun formatTime(time: Long): String {
         return try {
             val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
             sdf.format(Date(time))
         } catch (e: Exception) {
             "未知"
+        }
+    }
+
+    fun executeShell(command: String, useRoot: Boolean = false): String {
+        return try {
+            val process = if (useRoot) {
+                Runtime.getRuntime().exec(arrayOf("su", "-c", command))
+            } else {
+                Runtime.getRuntime().exec(command)
+            }
+            val reader = BufferedReader(InputStreamReader(process.inputStream))
+            val errorReader = BufferedReader(InputStreamReader(process.errorStream))
+            val output = StringBuilder()
+            var line: String?
+            while (reader.readLine().also { line = it } != null) {
+                output.append(line).append("\n")
+            }
+            while (errorReader.readLine().also { line = it } != null) {
+                output.append("Error: ").append(line).append("\n")
+            }
+            process.waitFor()
+            if (output.isEmpty()) "执行成功 (无输出)" else output.toString().trim()
+        } catch (e: Exception) {
+            "执行失败: ${e.message}"
         }
     }
 }

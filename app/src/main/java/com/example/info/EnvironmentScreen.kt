@@ -1,7 +1,6 @@
 package com.example.info
 
 import android.os.Build
-import android.os.Environment
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,6 +11,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Settings
@@ -53,7 +53,7 @@ fun EnvironmentScreen(modifier: Modifier = Modifier) {
             TopAppBar(
                 title = {
                     Text(
-                        text = "环境信息",
+                        text = Strings.get("environment"),
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Medium
                     )
@@ -95,57 +95,92 @@ fun EnvironmentContent(modifier: Modifier = Modifier) {
 
         // 系统信息
         InfoCard(
-            title = "系统信息",
+            title = Strings.get("environment"),
             icon = Icons.Default.Phone,
             content = {
                 InfoListItem(
-                    headline = "Android 版本",
+                    headline = Strings.get("android_version"),
                     supporting = Build.VERSION.RELEASE ?: "Unknown",
                     icon = Icons.Default.Phone
                 )
-                HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant
-                )
-                InfoListItem(
-                    headline = "SDK 版本",
-                    supporting = "API ${Build.VERSION.SDK_INT}",
-                    icon = Icons.Default.Settings
-                )
-                HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant
-                )
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                 InfoListItem(
                     headline = "Android ID",
                     supporting = DeviceUtils.getAndroidId(context),
                     icon = Icons.Default.Phone
                 )
-                HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant
-                )
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                 InfoListItem(
-                    headline = "Bootloader",
+                    headline = Strings.get("api_level"),
+                    supporting = "API ${Build.VERSION.SDK_INT}",
+                    icon = Icons.Default.Settings
+                )
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                InfoListItem(
+                    headline = Strings.get("bootloader"),
                     supporting = DeviceUtils.checkBootloaderStatus(),
                     icon = Icons.Default.Info
                 )
-                HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant
-                )
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                 InfoListItem(
-                    headline = "处理器平台/硬件",
-                    supporting = Build.HARDWARE ?: "未知",
+                    headline = Strings.get("jvm_version"),
+                    supporting = System.getProperty("java.vm.version") ?: "Unknown",
+                    icon = Icons.Default.Settings
+                )
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                InfoListItem(
+                    headline = Strings.get("build_date"),
+                    supporting = DeviceUtils.formatTime(Build.TIME),
                     icon = Icons.Default.Info
                 )
-                HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant
-                )
+            }
+        )
+
+        // 处理器与内存
+        InfoCard(
+            title = Strings.get("soc_info"),
+            icon = Icons.Default.Build,
+            content = {
                 InfoListItem(
-                    headline = "系统发行组织/主机",
-                    supporting = Build.HOST ?: "未知",
+                    headline = Strings.get("soc_info"),
+                    supporting = DeviceUtils.getSocInfo(),
+                    icon = Icons.Default.Info
+                )
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                InfoListItem(
+                    headline = Strings.get("mem_total"),
+                    supporting = DeviceUtils.formatStorageSize(DeviceUtils.getMemoryInfo(context).totalMem),
+                    icon = Icons.Default.Info
+                )
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                InfoListItem(
+                    headline = Strings.get("storage_usage"),
+                    supporting = "${DeviceUtils.getStorageUsagePercentage()}%",
+                    icon = Icons.Default.Info
+                )
+            }
+        )
+
+        // 设备与硬件
+        InfoCard(
+            title = Strings.get("model"),
+            icon = Icons.Default.Settings,
+            content = {
+                InfoListItem(
+                    headline = Strings.get("manufacturer"),
+                    supporting = Build.MANUFACTURER ?: "Unknown",
+                    icon = Icons.Default.Info
+                )
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                InfoListItem(
+                    headline = Strings.get("model"),
+                    supporting = Build.MODEL ?: "Unknown",
+                    icon = Icons.Default.Info
+                )
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                InfoListItem(
+                    headline = Strings.get("hardware"),
+                    supporting = Build.HARDWARE ?: "Unknown",
                     icon = Icons.Default.Info
                 )
             }
@@ -153,144 +188,18 @@ fun EnvironmentContent(modifier: Modifier = Modifier) {
 
         // 内核信息
         InfoCard(
-            title = "内核信息",
-            icon = Icons.Default.Settings,
-            content = {
-                InfoListItem(
-                    headline = "内核版本",
-                    supporting = System.getProperty("os.version") ?: "Unknown",
-                    icon = Icons.Default.Info
-                )
-                HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant
-                )
-                InfoListItem(
-                    headline = "内核编译日期",
-                    supporting = DeviceUtils.getKernelBuildDate(),
-                    icon = Icons.Default.Info
-                )
-            }
-        )
-
-        // 设备信息
-        InfoCard(
-            title = "设备信息",
-            icon = Icons.Default.Phone,
-            content = {
-                InfoListItem(
-                    headline = "制造商",
-                    supporting = Build.MANUFACTURER ?: "Unknown",
-                    icon = Icons.Default.Info
-                )
-                HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant
-                )
-                InfoListItem(
-                    headline = "型号",
-                    supporting = Build.MODEL ?: "Unknown",
-                    icon = Icons.Default.Info
-                )
-                HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant
-                )
-                InfoListItem(
-                    headline = "设备",
-                    supporting = Build.DEVICE ?: "Unknown",
-                    icon = Icons.Default.Info
-                )
-            }
-        )
-
-        // 构建信息
-        InfoCard(
-            title = "构建信息",
+            title = Strings.get("kernel_version"),
             icon = Icons.Default.Info,
             content = {
                 InfoListItem(
-                    headline = "构建 ID",
-                    supporting = Build.ID ?: "未知",
+                    headline = Strings.get("kernel_version"),
+                    supporting = System.getProperty("os.version") ?: "Unknown",
                     icon = Icons.Default.Info
                 )
-                HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant
-                )
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                 InfoListItem(
-                    headline = "构建时间",
-                    supporting = DeviceUtils.formatTime(Build.TIME),
-                    icon = Icons.Default.Info
-                )
-                HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant
-                )
-                InfoListItem(
-                    headline = "构建用户",
-                    supporting = Build.USER ?: "未知",
-                    icon = Icons.Default.Info
-                )
-            }
-        )
-
-        // 存储信息
-        InfoCard(
-            title = "存储信息",
-            icon = Icons.Default.Settings,
-            content = {
-                val externalStorage = Environment.getExternalStorageDirectory()
-                val internalStorage = Environment.getDataDirectory()
-
-                InfoListItem(
-                    headline = "内部存储/用户 data 路径",
-                    supporting = internalStorage.absolutePath,
-                    icon = Icons.Default.Phone
-                )
-                HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant
-                )
-                InfoListItem(
-                    headline = "外部存储路径",
-                    supporting = externalStorage?.absolutePath ?: "不可用",
-                    icon = Icons.Default.Settings
-                )
-                HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant
-                )
-                InfoListItem(
-                    headline = "存储挂载状态",
-                    supporting = if (Environment.getExternalStorageState() == Environment.MEDIA_MOUNTED) "已挂载" else "未挂载",
-                    icon = Icons.Default.Info
-                )
-                HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant
-                )
-                InfoListItem(
-                    headline = "硬盘大小",
-                    supporting = DeviceUtils.formatStorageSize(DeviceUtils.getTotalStorageSize(internalStorage)),
-                    icon = Icons.Default.Phone
-                )
-                HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant
-                )
-                InfoListItem(
-                    headline = "已用空间",
-                    supporting = DeviceUtils.formatStorageSize(DeviceUtils.getUsedStorageSize(internalStorage)),
-                    icon = Icons.Default.Settings
-                )
-                HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant
-                )
-                InfoListItem(
-                    headline = "未用空间",
-                    supporting = DeviceUtils.formatStorageSize(DeviceUtils.getFreeStorageSize(internalStorage)),
+                    headline = Strings.get("kernel_date"),
+                    supporting = DeviceUtils.getKernelBuildDate(),
                     icon = Icons.Default.Info
                 )
             }
@@ -316,17 +225,15 @@ fun BatteryCard(batteryLevel: Int) {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
                         imageVector = Icons.Default.Phone,
-                        contentDescription = "电池",
+                        contentDescription = null,
                         modifier = Modifier.size(24.dp),
                         tint = if (batteryLevel > 20) Color(0xFF4CAF50) else Color(0xFFF44336)
                     )
                     Text(
-                        text = "电池电量",
+                        text = Strings.get("battery_level"),
                         style = MaterialTheme.typography.titleMedium,
                         modifier = Modifier.padding(start = 12.dp),
                         fontWeight = FontWeight.Medium
@@ -344,8 +251,7 @@ fun BatteryCard(batteryLevel: Int) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 12.dp),
-                color = if (batteryLevel > 20) Color(0xFF4CAF50) else Color(0xFFF44336),
-                trackColor = MaterialTheme.colorScheme.surfaceVariant
+                color = if (batteryLevel > 20) Color(0xFF4CAF50) else Color(0xFFF44336)
             )
         }
     }

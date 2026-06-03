@@ -2,29 +2,33 @@ package com.example.info
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.vector.ImageVector
 
 enum class Screen(
-    val title: String,
+    val key: String,
     val icon: ImageVector
 ) {
     Home(
-        title = "主页",
+        key = "home",
         icon = Icons.Default.Home
     ),
     Environment(
-        title = "设备",
+        key = "environment",
         icon = Icons.Default.Settings
     ),
     Restart(
-        title = "重启",
+        key = "restart",
         icon = Icons.Default.Refresh
     ),
     Settings(
-        title = "设置",
+        key = "settings",
         icon = Icons.Default.Settings
-    )
+    );
+
+    val title: String
+        @Composable
+        get() = Strings.get(key)
 }

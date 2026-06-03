@@ -21,11 +21,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -36,13 +36,20 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -55,7 +62,7 @@ fun HomeScreen(context: Context, modifier: Modifier = Modifier) {
             TopAppBar(
                 title = {
                     Text(
-                        text = "设备概览",
+                        text = Strings.get("device_overview"),
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Medium
                     )
@@ -77,81 +84,68 @@ fun HomeScreen(context: Context, modifier: Modifier = Modifier) {
             verticalArrangement = Arrangement.spacedBy(12.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // 1. 大卡片 - 设备概要
             LargeSummaryCard(context)
 
-            // 2. 第一行小卡片 (Android 版本, API 级别)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 SmallStatCard(
                     modifier = Modifier.weight(1f),
-                    title = "Android 版本",
+                    title = Strings.get("android_version"),
                     value = Build.VERSION.RELEASE,
                     icon = Icons.Default.Phone,
                     color = MaterialTheme.colorScheme.primary
                 )
                 SmallStatCard(
                     modifier = Modifier.weight(1f),
-                    title = "API 级别",
+                    title = Strings.get("api_level"),
                     value = Build.VERSION.SDK_INT.toString(),
                     icon = Icons.Default.Settings,
                     color = MaterialTheme.colorScheme.secondary
                 )
             }
 
-            // 3. 第二行小卡片 (Bootloader, 构建状态)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 SmallStatCard(
                     modifier = Modifier.weight(1f),
-                    title = "Bootloader",
+                    title = Strings.get("bootloader"),
                     value = DeviceUtils.checkBootloaderStatus(),
                     icon = Icons.Default.Info,
                     color = MaterialTheme.colorScheme.tertiary
                 )
-                SmallStatCard(
-                    modifier = Modifier.weight(1f),
-                    title = "构建状态",
-                    value = Build.TYPE,
-                    icon = Icons.Default.Build,
-                    color = MaterialTheme.colorScheme.error
+                MemoryStatCard(
+                    modifier = Modifier.weight(1f)
                 )
             }
 
-            // 4. 第三行小卡片 (IP 地址, 网络类型)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 SmallStatCard(
                     modifier = Modifier.weight(1f),
-                    title = "IP 地址",
-                    value = DeviceUtils.getIpAddress(),
-                    icon = Icons.Default.LocationOn,
+                    title = Strings.get("selinux_status"),
+                    value = DeviceUtils.getSELinuxStatus(),
+                    icon = Icons.Default.Lock,
                     color = MaterialTheme.colorScheme.primary
                 )
-                SmallStatCard(
-                    modifier = Modifier.weight(1f),
-                    title = "网络类型",
-                    value = DeviceUtils.getNetworkType(context),
-                    icon = Icons.Default.Share,
-                    color = MaterialTheme.colorScheme.secondary
+                TimeStatCard(
+                    modifier = Modifier.weight(1f)
                 )
             }
 
-            // 5. 第四行小卡片 (Root 模块数量, 存储状态)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 SmallStatCard(
                     modifier = Modifier.weight(1f),
-                    title = "Root 模块数量",
-                    value = "${DeviceUtils.getRootModuleCount()} 个",
+                    title = Strings.get("root_modules"),
+                    value = "${DeviceUtils.getRootModuleCount()} ",
                     icon = Icons.AutoMirrored.Filled.List,
                     color = MaterialTheme.colorScheme.tertiary
                 )
@@ -159,16 +153,6 @@ fun HomeScreen(context: Context, modifier: Modifier = Modifier) {
                     modifier = Modifier.weight(1f)
                 )
             }
-
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            Text(
-                text = "点击下方导航栏查看更多细节",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            
-            Spacer(modifier = Modifier.height(16.dp))
         }
     }
 }
@@ -207,7 +191,7 @@ fun LargeSummaryCard(context: Context) {
                 )
             }
             Text(
-                text = "制造商: ${Build.MANUFACTURER}",
+                text = "${Strings.get("manufacturer")}: ${Build.MANUFACTURER}",
                 style = MaterialTheme.typography.bodyLarge,
                 modifier = Modifier.padding(top = 4.dp)
             )
@@ -217,7 +201,7 @@ fun LargeSummaryCard(context: Context) {
                 horizontalArrangement = Arrangement.End
             ) {
                 Text(
-                    text = "电池电量: ${DeviceUtils.getBatteryLevel(context)}%",
+                    text = "${Strings.get("battery_level")}: ${DeviceUtils.getBatteryLevel(context)}%",
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Medium
                 )
@@ -278,6 +262,143 @@ fun SmallStatCard(
 }
 
 @Composable
+fun MemoryStatCard(modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val info = DeviceUtils.getMemoryInfo(context)
+    val total = info.totalMem
+    val available = info.availMem
+    val used = total - available
+    val ratio = if (total > 0) used.toFloat() / total.toFloat() else 0f
+    val percent = (ratio * 100).toInt()
+
+    Card(
+        modifier = modifier.height(100.dp),
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(ratio)
+                    .fillMaxHeight()
+                    .background(MaterialTheme.colorScheme.error.copy(alpha = 0.15f))
+            )
+
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(12.dp),
+                verticalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = Strings.get("mem_usage"),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Icon(
+                        imageVector = Icons.Default.Build,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Bottom
+                ) {
+                    Text(
+                        text = "$percent%",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.error,
+                        fontSize = 18.sp
+                    )
+                    Text(
+                        text = "${DeviceUtils.formatStorageSize(used)} / ${DeviceUtils.formatStorageSize(total)}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 9.sp
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun TimeStatCard(modifier: Modifier = Modifier) {
+    var time by remember { mutableStateOf(DeviceUtils.getCurrentTime()) }
+    var date by remember { mutableStateOf(DeviceUtils.getCurrentDate()) }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            time = DeviceUtils.getCurrentTime()
+            date = DeviceUtils.getCurrentDate()
+            delay(1000)
+        }
+    }
+
+    Card(
+        modifier = modifier.height(100.dp),
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(12.dp),
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = Strings.get("current_time"),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Icon(
+                    imageVector = Icons.Default.DateRange,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = MaterialTheme.colorScheme.secondary
+                )
+            }
+            Column {
+                Text(
+                    text = time,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontSize = 20.sp
+                )
+                Text(
+                    text = date,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 12.sp
+                )
+            }
+        }
+    }
+}
+
+@Composable
 fun StorageStatCard(modifier: Modifier = Modifier) {
     val internalStorage = Environment.getDataDirectory()
     val total = DeviceUtils.getTotalStorageSize(internalStorage)
@@ -294,7 +415,6 @@ fun StorageStatCard(modifier: Modifier = Modifier) {
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            // 进度条背景 - 完整覆盖卡片内部
             Box(
                 modifier = Modifier
                     .fillMaxWidth(ratio)
@@ -314,7 +434,7 @@ fun StorageStatCard(modifier: Modifier = Modifier) {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "存储状态",
+                        text = Strings.get("storage_status"),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
