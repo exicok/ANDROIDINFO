@@ -1,51 +1,48 @@
 package com.example.info
 
 import android.content.Context
-import android.os.BatteryManager
 import android.os.Build
 import android.os.Environment
-import android.os.StatFs
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.example.info.ui.components.InfoCard
-import com.example.info.ui.components.InfoListItem
-import java.io.File
+import androidx.compose.ui.unit.sp
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -53,12 +50,12 @@ fun HomeScreen(context: Context, modifier: Modifier = Modifier) {
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
 
     Scaffold(
-        modifier = modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+        modifier = modifier,
         topBar = {
             TopAppBar(
                 title = {
                     Text(
-                        text = "设备信息",
+                        text = "设备概览",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Medium
                     )
@@ -71,333 +68,284 @@ fun HomeScreen(context: Context, modifier: Modifier = Modifier) {
             )
         }
     ) { innerPadding ->
-        DeviceInfoContent(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
                 .padding(innerPadding)
                 .padding(16.dp)
-        )
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            // 1. 大卡片 - 设备概要
+            LargeSummaryCard(context)
+
+            // 2. 第一行小卡片 (Android 版本, API 级别)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                SmallStatCard(
+                    modifier = Modifier.weight(1f),
+                    title = "Android 版本",
+                    value = Build.VERSION.RELEASE,
+                    icon = Icons.Default.Phone,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                SmallStatCard(
+                    modifier = Modifier.weight(1f),
+                    title = "API 级别",
+                    value = Build.VERSION.SDK_INT.toString(),
+                    icon = Icons.Default.Settings,
+                    color = MaterialTheme.colorScheme.secondary
+                )
+            }
+
+            // 3. 第二行小卡片 (Bootloader, 构建状态)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                SmallStatCard(
+                    modifier = Modifier.weight(1f),
+                    title = "Bootloader",
+                    value = DeviceUtils.checkBootloaderStatus(),
+                    icon = Icons.Default.Info,
+                    color = MaterialTheme.colorScheme.tertiary
+                )
+                SmallStatCard(
+                    modifier = Modifier.weight(1f),
+                    title = "构建状态",
+                    value = Build.TYPE,
+                    icon = Icons.Default.Build,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+
+            // 4. 第三行小卡片 (IP 地址, 网络类型)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                SmallStatCard(
+                    modifier = Modifier.weight(1f),
+                    title = "IP 地址",
+                    value = DeviceUtils.getIpAddress(),
+                    icon = Icons.Default.LocationOn,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                SmallStatCard(
+                    modifier = Modifier.weight(1f),
+                    title = "网络类型",
+                    value = DeviceUtils.getNetworkType(context),
+                    icon = Icons.Default.Share,
+                    color = MaterialTheme.colorScheme.secondary
+                )
+            }
+
+            // 5. 第四行小卡片 (Root 模块数量, 存储状态)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                SmallStatCard(
+                    modifier = Modifier.weight(1f),
+                    title = "Root 模块数量",
+                    value = "${DeviceUtils.getRootModuleCount()} 个",
+                    icon = Icons.AutoMirrored.Filled.List,
+                    color = MaterialTheme.colorScheme.tertiary
+                )
+                StorageStatCard(
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            Text(
+                text = "点击下方导航栏查看更多细节",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            
+            Spacer(modifier = Modifier.height(16.dp))
+        }
     }
 }
 
 @Composable
-fun DeviceInfoContent(modifier: Modifier = Modifier) {
-    val context = LocalContext.current
-    var batteryLevel by remember { mutableIntStateOf(getBatteryLevel(context)) }
-
-    Column(
-        modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        BatteryCard(batteryLevel = batteryLevel)
-
-        // 系统信息卡片（包含系统环境、构建信息）
-        InfoCard(
-            title = "系统信息",
-            icon = Icons.Default.Phone,
-            content = {
-                InfoListItem(
-                    headline = "Android 版本",
-                    supporting = Build.VERSION.RELEASE ?: "Unknown",
-                    icon = Icons.Default.Phone
-                )
-                HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant
-                )
-                InfoListItem(
-                    headline = "SDK 版本",
-                    supporting = "API ${Build.VERSION.SDK_INT}",
-                    icon = Icons.Default.Settings
-                )
-                HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant
-                )
-                InfoListItem(
-                    headline = "Android ID",
-                    supporting = Build.SERIAL ?: "未知",
-                    icon = Icons.Default.Phone
-                )
-                HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant
-                )
-                InfoListItem(
-                    headline = "Bootloader",
-                    supporting = Build.BOOTLOADER ?: "未知",
-                    icon = Icons.Default.Info
-                )
-                HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant
-                )
-                InfoListItem(
-                    headline = "硬件",
-                    supporting = Build.HARDWARE ?: "未知",
-                    icon = Icons.Default.Info
-                )
-                HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant
-                )
-                InfoListItem(
-                    headline = "主机",
-                    supporting = Build.HOST ?: "未知",
-                    icon = Icons.Default.Info
-                )
-                HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant
-                )
-                InfoListItem(
-                    headline = "构建 ID",
-                    supporting = Build.ID ?: "未知",
-                    icon = Icons.Default.Info
-                )
-                HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant
-                )
-                InfoListItem(
-                    headline = "构建时间",
-                    supporting = Build.TIME.toString(),
-                    icon = Icons.Default.Info
-                )
-                HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant
-                )
-                InfoListItem(
-                    headline = "构建用户",
-                    supporting = Build.USER ?: "未知",
-                    icon = Icons.Default.Info
-                )
-            }
-        )
-
-        // 内核信息卡片
-        InfoCard(
-            title = "内核信息",
-            icon = Icons.Default.Settings,
-            content = {
-                InfoListItem(
-                    headline = "内核版本",
-                    supporting = System.getProperty("os.version") ?: "Unknown",
-                    icon = Icons.Default.Info
-                )
-                HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant
-                )
-                InfoListItem(
-                    headline = "内核编译日期",
-                    supporting = getKernelBuildDate(),
-                    icon = Icons.Default.Info
-                )
-            }
-        )
-
-        // 设备信息卡片
-        InfoCard(
-            title = "设备信息",
-            icon = Icons.Default.Phone,
-            content = {
-                InfoListItem(
-                    headline = "制造商",
-                    supporting = Build.MANUFACTURER ?: "Unknown",
-                    icon = Icons.Default.Info
-                )
-                HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant
-                )
-                InfoListItem(
-                    headline = "型号",
-                    supporting = Build.MODEL ?: "Unknown",
-                    icon = Icons.Default.Info
-                )
-                HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant
-                )
-                InfoListItem(
-                    headline = "设备",
-                    supporting = Build.DEVICE ?: "Unknown",
-                    icon = Icons.Default.Info
-                )
-            }
-        )
-
-        // 存储信息卡片
-        InfoCard(
-            title = "存储信息",
-            icon = Icons.Default.Settings,
-            content = {
-                val externalStorage = Environment.getExternalStorageDirectory()
-                val internalStorage = Environment.getDataDirectory()
-
-                InfoListItem(
-                    headline = "用户数据路径",
-                    supporting = internalStorage.absolutePath,
-                    icon = Icons.Default.Phone
-                )
-                HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant
-                )
-                InfoListItem(
-                    headline = "外部存储路径",
-                    supporting = externalStorage?.absolutePath ?: "不可用",
-                    icon = Icons.Default.Settings
-                )
-                HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant
-                )
-                InfoListItem(
-                    headline = "内部存储状态",
-                    supporting = if (Environment.getExternalStorageState() == Environment.MEDIA_MOUNTED) "已挂载" else "未挂载",
-                    icon = Icons.Default.Info
-                )
-                HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant
-                )
-                InfoListItem(
-                    headline = "硬盘大小",
-                    supporting = formatStorageSize(getTotalStorageSize(internalStorage)),
-                    icon = Icons.Default.Phone
-                )
-                HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant
-                )
-                InfoListItem(
-                    headline = "已用空间",
-                    supporting = formatStorageSize(getUsedStorageSize(internalStorage)),
-                    icon = Icons.Default.Settings
-                )
-                HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant
-                )
-                InfoListItem(
-                    headline = "未用空间",
-                    supporting = formatStorageSize(getFreeStorageSize(internalStorage)),
-                    icon = Icons.Default.Info
-                )
-            }
-        )
-    }
-}
-
-@Composable
-fun BatteryCard(batteryLevel: Int) {
+fun LargeSummaryCard(context: Context) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(160.dp),
+        shape = MaterialTheme.shapes.extraLarge,
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
+            containerColor = MaterialTheme.colorScheme.primaryContainer,
+            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
         )
     ) {
         Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
+                .fillMaxSize()
+                .padding(20.dp),
+            verticalArrangement = Arrangement.Center
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.CheckCircle,
+                    contentDescription = null,
+                    modifier = Modifier.size(32.dp)
+                )
+                Text(
+                    text = Build.MODEL,
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            Text(
+                text = "制造商: ${Build.MANUFACTURER}",
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.padding(top = 4.dp)
+            )
+            Spacer(modifier = Modifier.weight(1f))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End
+            ) {
+                Text(
+                    text = "电池电量: ${DeviceUtils.getBatteryLevel(context)}%",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun SmallStatCard(
+    modifier: Modifier = Modifier,
+    title: String,
+    value: String,
+    icon: ImageVector,
+    color: Color
+) {
+    Card(
+        modifier = modifier.height(100.dp),
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(12.dp),
+            verticalArrangement = Arrangement.SpaceBetween
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Phone,
-                        contentDescription = "电池",
-                        modifier = Modifier.size(24.dp),
-                        tint = if (batteryLevel > 20) Color(0xFF4CAF50) else Color(0xFFF44336)
-                    )
-                    Text(
-                        text = "电池电量",
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.padding(start = 12.dp),
-                        fontWeight = FontWeight.Medium
-                    )
-                }
                 Text(
-                    text = "$batteryLevel%",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = if (batteryLevel > 20) Color(0xFF4CAF50) else Color(0xFFF44336)
+                    text = title,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = color
                 )
             }
-            LinearProgressIndicator(
-                progress = { batteryLevel / 100f },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 12.dp),
-                color = if (batteryLevel > 20) Color(0xFF4CAF50) else Color(0xFFF44336),
-                trackColor = MaterialTheme.colorScheme.surfaceVariant
+            Text(
+                text = value,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontSize = 15.sp,
+                maxLines = 1
             )
         }
     }
 }
 
-fun getBatteryLevel(context: Context): Int {
-    val batteryManager = context.getSystemService(Context.BATTERY_SERVICE) as BatteryManager
-    return batteryManager.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
-}
-
-fun getKernelBuildDate(): String {
-    return try {
-        val kernelVersion = System.getProperty("os.version") ?: ""
-        val parts = kernelVersion.split(" ")
-        for (part in parts) {
-            if (part.matches(Regex("\\d{2,4}-\\d{2}-\\d{2}"))) {
-                return part
+@Composable
+fun StorageStatCard(modifier: Modifier = Modifier) {
+    val internalStorage = Environment.getDataDirectory()
+    val total = DeviceUtils.getTotalStorageSize(internalStorage)
+    val used = DeviceUtils.getUsedStorageSize(internalStorage)
+    val ratio = if (total > 0) used.toFloat() / total.toFloat() else 0f
+    val percent = (ratio * 100).toInt()
+    
+    Card(
+        modifier = modifier.height(100.dp),
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            // 进度条背景 - 完整覆盖卡片内部
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(ratio)
+                    .fillMaxHeight()
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
+            )
+            
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(12.dp),
+                verticalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "存储状态",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Icon(
+                        imageVector = Icons.Default.Settings,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+                
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Bottom
+                ) {
+                    Text(
+                        text = "$percent%",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontSize = 18.sp
+                    )
+                    Text(
+                        text = "${DeviceUtils.formatStorageSize(used)} / ${DeviceUtils.formatStorageSize(total)}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 9.sp
+                    )
+                }
             }
         }
-        "未知"
-    } catch (e: Exception) {
-        "未知"
     }
-}
-
-fun getTotalStorageSize(directory: File): Long {
-    return try {
-        val stat = StatFs(directory.absolutePath)
-        stat.totalBytes
-    } catch (e: Exception) {
-        0L
-    }
-}
-
-fun getUsedStorageSize(directory: File): Long {
-    return try {
-        val stat = StatFs(directory.absolutePath)
-        stat.totalBytes - stat.availableBytes
-    } catch (e: Exception) {
-        0L
-    }
-}
-
-fun getFreeStorageSize(directory: File): Long {
-    return try {
-        val stat = StatFs(directory.absolutePath)
-        stat.availableBytes
-    } catch (e: Exception) {
-        0L
-    }
-}
-
-fun formatStorageSize(bytes: Long): String {
-    if (bytes <= 0) return "0 B"
-    
-    val units = arrayOf("B", "KB", "MB", "GB", "TB")
-    val digitGroups = (Math.log10(bytes.toDouble()) / Math.log10(1024.0)).toInt()
-    
-    return String.format("%.2f %s", bytes / Math.pow(1024.0, digitGroups.toDouble()), units[digitGroups])
 }

@@ -1,12 +1,13 @@
 package com.example.info
 
 import android.content.Context
+import android.content.SharedPreferences
 import android.os.Bundle
-import android.view.Display
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -16,23 +17,43 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.tooling.preview.Preview
 import com.example.info.ui.theme.INFOTheme
 
 class MainActivity : ComponentActivity() {
+    private lateinit var sharedPreferences: SharedPreferences
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         
+        sharedPreferences = getSharedPreferences("settings", MODE_PRIVATE)
         setPreferredRefreshRate()
         
         setContent {
-            INFOTheme {
-                MainScreen(this)
+            var themeMode by remember { 
+                mutableStateOf(sharedPreferences.getString("theme_mode", "System") ?: "System") 
+            }
+
+            val darkTheme = when (themeMode) {
+                "Light" -> false
+                "Dark" -> true
+                else -> isSystemInDarkTheme()
+            }
+
+            INFOTheme(darkTheme = darkTheme) {
+                MainScreen(
+                    context = this,
+                    currentTheme = themeMode,
+                    onThemeChange = { newMode ->
+                        themeMode = newMode
+                        sharedPreferences.edit().putString("theme_mode", newMode).apply()
+                    }
+                )
             }
         }
     }
@@ -51,7 +72,11 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun MainScreen(context: Context) {
+fun MainScreen(
+    context: Context,
+    currentTheme: String,
+    onThemeChange: (String) -> Unit
+) {
     var selectedTabIndex by rememberSaveable { mutableIntStateOf(0) }
 
     Scaffold(
@@ -77,24 +102,12 @@ fun MainScreen(context: Context) {
     ) { innerPadding ->
         when (Screen.entries[selectedTabIndex]) {
             Screen.Home -> HomeScreen(context, Modifier.padding(innerPadding))
+            Screen.Environment -> EnvironmentScreen(Modifier.padding(innerPadding))
             Screen.Restart -> RestartScreen(context)
-            Screen.Empty -> EmptyScreen()
+            Screen.Settings -> SettingsScreen(
+                currentTheme = currentTheme,
+                onThemeChange = onThemeChange
+            )
         }
-    }
-}
-
-@Preview(showBackground = true)
-@Composable
-fun MainScreenPreview() {
-    INFOTheme {
-        EmptyScreen()
-    }
-}
-
-@Preview(showBackground = true)
-@Composable
-fun MainScreenDarkPreview() {
-    INFOTheme(darkTheme = true) {
-        EmptyScreen()
     }
 }
