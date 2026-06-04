@@ -29,7 +29,9 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -51,7 +53,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun HomeScreen(context: Context, modifier: Modifier = Modifier) {
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
@@ -159,6 +161,9 @@ fun HomeScreen(context: Context, modifier: Modifier = Modifier) {
 
 @Composable
 fun LargeSummaryCard(context: Context) {
+    val batteryLevel = DeviceUtils.getBatteryLevel(context)
+    val batteryRatio = batteryLevel / 100f
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -169,42 +174,52 @@ fun LargeSummaryCard(context: Context) {
             contentColor = MaterialTheme.colorScheme.onPrimaryContainer
         )
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(20.dp),
-            verticalArrangement = Arrangement.Center
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.CheckCircle,
-                    contentDescription = null,
-                    modifier = Modifier.size(32.dp)
-                )
-                Text(
-                    text = Build.MODEL,
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-            Text(
-                text = "${Strings.get("manufacturer")}: ${Build.MANUFACTURER}",
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.padding(top = 4.dp)
+        Box(modifier = Modifier.fillMaxSize()) {
+            // 电池电量背景进度条 (绿色)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(batteryRatio)
+                    .fillMaxHeight()
+                    .background(Color(0xFF4CAF50).copy(alpha = 0.35f))
             )
-            Spacer(modifier = Modifier.weight(1f))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End
+
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(20.dp),
+                verticalArrangement = Arrangement.Center
             ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    @OptIn(ExperimentalMaterial3ExpressiveApi::class)
+                    LoadingIndicator(
+                        modifier = Modifier.size(32.dp),
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                    Text(
+                        text = Build.MODEL,
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
                 Text(
-                    text = "${Strings.get("battery_level")}: ${DeviceUtils.getBatteryLevel(context)}%",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Medium
+                    text = "${Strings.get("manufacturer")}: ${Build.MANUFACTURER}",
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.padding(top = 4.dp)
                 )
+                Spacer(modifier = Modifier.weight(1f))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    Text(
+                        text = "${Strings.get("battery_level")}: $batteryLevel%",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
             }
         }
     }
@@ -268,7 +283,7 @@ fun MemoryStatCard(modifier: Modifier = Modifier) {
     val total = info.totalMem
     val available = info.availMem
     val used = total - available
-    val ratio = if (total > 0) used.toFloat() / total.toFloat() else 0f
+    val ratio = (if (total > 0) used.toFloat() / total.toFloat() else 0f).coerceIn(0f, 1f)
     val percent = (ratio * 100).toInt()
 
     Card(
@@ -317,14 +332,14 @@ fun MemoryStatCard(modifier: Modifier = Modifier) {
                     verticalAlignment = Alignment.Bottom
                 ) {
                     Text(
-                        text = "$percent%",
+                        text = DeviceUtils.formatStorageSize(total),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.error,
                         fontSize = 18.sp
                     )
                     Text(
-                        text = "${DeviceUtils.formatStorageSize(used)} / ${DeviceUtils.formatStorageSize(total)}",
+                        text = "${Strings.get("used")} ${DeviceUtils.formatStorageSize(used)}",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 9.sp
@@ -403,7 +418,7 @@ fun StorageStatCard(modifier: Modifier = Modifier) {
     val internalStorage = Environment.getDataDirectory()
     val total = DeviceUtils.getTotalStorageSize(internalStorage)
     val used = DeviceUtils.getUsedStorageSize(internalStorage)
-    val ratio = if (total > 0) used.toFloat() / total.toFloat() else 0f
+    val ratio = (if (total > 0) used.toFloat() / total.toFloat() else 0f).coerceIn(0f, 1f)
     val percent = (ratio * 100).toInt()
     
     Card(
@@ -452,14 +467,14 @@ fun StorageStatCard(modifier: Modifier = Modifier) {
                     verticalAlignment = Alignment.Bottom
                 ) {
                     Text(
-                        text = "$percent%",
+                        text = DeviceUtils.formatStorageSize(used),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary,
                         fontSize = 18.sp
                     )
                     Text(
-                        text = "${DeviceUtils.formatStorageSize(used)} / ${DeviceUtils.formatStorageSize(total)}",
+                        text = Strings.get("used"),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 9.sp

@@ -14,6 +14,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -25,6 +26,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun RestartScreen(context: Context) {
     Surface(
@@ -69,11 +71,6 @@ fun RestartScreen(context: Context) {
                     RestartButton(
                         text = "重启系统 (需要Root)",
                         onClick = { runShellCommand("reboot") }
-                    )
-                    
-                    RestartButton(
-                        text = "重启界面 (需要Root)",
-                        onClick = { runShellCommand("pkill -l TERM com.android.systemui") }
                     )
                     
                     RestartButton(

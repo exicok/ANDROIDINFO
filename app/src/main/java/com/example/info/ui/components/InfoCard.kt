@@ -19,6 +19,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -73,7 +74,9 @@ fun InfoCard(
 fun InfoListItem(
     headline: String,
     supporting: String,
-    icon: ImageVector
+    icon: ImageVector,
+    iconTint: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    trailingContent: @Composable (() -> Unit)? = null
 ) {
     ListItem(
         headlineContent = {
@@ -95,9 +98,10 @@ fun InfoListItem(
                 imageVector = icon,
                 contentDescription = null,
                 modifier = Modifier.size(24.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                tint = iconTint
             )
         },
+        trailingContent = trailingContent,
         colors = ListItemDefaults.colors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
         )

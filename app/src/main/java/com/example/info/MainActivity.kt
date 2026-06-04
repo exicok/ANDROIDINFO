@@ -1,5 +1,6 @@
 package com.example.info
 
+import android.app.ActivityManager
 import android.content.Context
 import android.content.SharedPreferences
 import android.content.res.Configuration
@@ -10,12 +11,14 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -26,6 +29,7 @@ import androidx.compose.ui.Modifier
 import com.example.info.ui.theme.INFOTheme
 import java.util.Locale
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 class MainActivity : ComponentActivity() {
     private lateinit var sharedPreferences: SharedPreferences
 
@@ -80,7 +84,7 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
-    
+
     private fun setPreferredRefreshRate() {
         val display = windowManager.defaultDisplay
         val supportedModes = display.supportedModes
