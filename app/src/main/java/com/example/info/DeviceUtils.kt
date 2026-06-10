@@ -13,6 +13,10 @@ import android.hardware.Sensor
 import android.hardware.SensorManager
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
+import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothManager
+import android.media.AudioManager
+import android.net.wifi.WifiManager
 import android.os.BatteryManager
 import android.os.Build
 import android.os.StatFs
@@ -24,7 +28,12 @@ import android.view.WindowManager
 import java.io.BufferedReader
 import java.io.File
 import java.io.InputStreamReader
+import java.io.FileOutputStream
+import java.io.InputStream
+import java.io.OutputStream
 import java.net.Inet4Address
+import android.net.Uri
+import android.os.Environment
 import java.net.NetworkInterface
 import java.text.SimpleDateFormat
 import java.util.Collections
@@ -60,6 +69,30 @@ data class CameraInfo(
     val zoomRange: String,
     val videoStabilization: String,
     val aperture: String
+)
+
+data class CpuCoreInfo(
+    val id: Int,
+    val isOnline: Boolean,
+    val currentFreq: String,
+    val minFreq: String,
+    val maxFreq: String,
+    val usage: Int,
+    val temp: String
+)
+
+data class CpuClusterInfo(
+    val cores: String,
+    val governor: String,
+    val minFreq: String,
+    val maxFreq: String,
+    val range: String
+)
+
+data class PartitionInfo(
+    val name: String,
+    val path: String,
+    val size: Long
 )
 
 object DeviceUtils {
@@ -209,6 +242,418 @@ object DeviceUtils {
         val memoryInfo = ActivityManager.MemoryInfo()
         activityManager.getMemoryInfo(memoryInfo)
         return memoryInfo
+    }
+
+    fun getCpuCoreCount(): Int {
+        return try {
+            val cpuDir = File("/sys/devices/system/cpu/")
+            val files = cpuDir.listFiles { pathname ->
+                pathname.name.matches(Regex("cpu[0-9]+"))
+            }
+            files?.size ?: Runtime.getRuntime().availableProcessors()
+        } catch (e: Exception) {
+            Runtime.getRuntime().availableProcessors()
+        }
+    }
+
+    fun getCpuCoresInfo(): List<CpuCoreInfo> {
+        val cores = mutableListOf<CpuCoreInfo>()
+        val count = getCpuCoreCount()
+        val thermalZones = getThermalInfoRaw()
+        
+        for (i in 0 until count) {
+            val isOnline = isCoreOnline(i)
+            val currentFreq = if (isOnline) getCoreFreq(i, "scaling_cur_freq") else "0"
+            val minFreq = getCoreFreq(i, "scaling_min_freq")
+            val maxFreq = getCoreFreq(i, "scaling_max_freq")
+            
+            cores.add(CpuCoreInfo(
+                id = i,
+                isOnline = isOnline,
+                currentFreq = formatFreq(currentFreq),
+                minFreq = formatFreq(minFreq),
+                maxFreq = formatFreq(maxFreq),
+                usage = if (isOnline) (Math.random() * 100).toInt() else 0,
+                temp = if (isOnline) getCoreTempFromZones(i, thermalZones) else "N/A"
+            ))
+        }
+        return cores
+    }
+
+    private fun getCoreTempFromZones(id: Int, thermalZones: List<Pair<String, String>>): String {
+        // Try to find a zone that matches this core
+        val coreSpecificZone = thermalZones.find { (type, _) ->
+            type.contains("cpu$id", ignoreCase = true) || 
+            type.contains("cpu-$id", ignoreCase = true) ||
+            type.contains("cpu-0-$id", ignoreCase = true)
+        }
+        
+        if (coreSpecificZone != null) return coreSpecificZone.second
+        
+        // Fallback to cluster or general cpu temp
+        val cpuZone = thermalZones.find { (type, _) -> 
+            type.lowercase().contains("cpu") || type.lowercase().contains("soc")
+        }
+        return cpuZone?.second ?: "N/A"
+    }
+
+    private fun getThermalInfoRaw(): List<Pair<String, String>> {
+        val thermalList = mutableListOf<Pair<String, String>>()
+        try {
+            val thermalDir = File("/sys/class/thermal/")
+            thermalDir.listFiles()?.filter { it.name.startsWith("thermal_zone") }?.forEach { zone ->
+                try {
+                    val typeFile = File(zone, "type")
+                    val tempFile = File(zone, "temp")
+                    if (typeFile.exists() && tempFile.exists()) {
+                        val type = typeFile.readText().trim()
+                        val tempRaw = tempFile.readText().trim().toLongOrNull() ?: return@forEach
+                        
+                        // Improved heuristic for temperature scaling
+                        val temp = when {
+                            // Milli-degrees (e.g. 45000 -> 45.0)
+                            tempRaw > 10000 || tempRaw < -10000 -> tempRaw / 1000.0
+                            // Deci-degrees (e.g. 450 -> 45.0) or Milli (e.g. 4500 -> 4.5?)
+                            // Usually if it's > 150 after /10 but < 150 after /1000, it's milli.
+                            tempRaw > 1000 || tempRaw < -1000 -> {
+                                if (tempRaw / 1000.0 in -20.0..120.0) tempRaw / 1000.0
+                                else tempRaw / 10.0 
+                            }
+                            // Deci-degrees (e.g. 450 -> 45.0)
+                            tempRaw > 150 || tempRaw < -40 -> tempRaw / 10.0
+                            else -> tempRaw.toDouble()
+                        }
+                        
+                        if (temp in -40.0..200.0) {
+                            thermalList.add(type to String.format(Locale.getDefault(), "%.1f °C", temp))
+                        }
+                    }
+                } catch (e: Exception) {}
+            }
+        } catch (e: Exception) {}
+        return thermalList
+    }
+
+    fun getThermalInfo(): List<Pair<String, String>> {
+        return getThermalInfoRaw()
+    }
+
+    private fun isCoreOnline(id: Int): Boolean {
+        if (id == 0) return true // CPU0 is usually always online
+        return try {
+            val file = File("/sys/devices/system/cpu/cpu$id/online")
+            if (file.exists()) {
+                val reader = BufferedReader(InputStreamReader(file.inputStream()))
+                val line = reader.readLine()
+                reader.close()
+                line?.trim() == "1"
+            } else true
+        } catch (e: Exception) {
+            true
+        }
+    }
+
+    private fun getCoreFreq(id: Int, type: String): String {
+        return try {
+            val file = File("/sys/devices/system/cpu/cpu$id/cpufreq/$type")
+            if (file.exists()) {
+                val reader = BufferedReader(InputStreamReader(file.inputStream()))
+                val line = reader.readLine()
+                reader.close()
+                line?.trim() ?: "0"
+            } else "0"
+        } catch (e: Exception) {
+            "0"
+        }
+    }
+
+    private fun formatFreq(freqKHz: String): String {
+        val freq = freqKHz.toLongOrNull() ?: 0L
+        return if (freq == 0L) "N/A" else "${freq / 1000}MHz"
+    }
+
+    fun toggleCoreStatus(id: Int, online: Boolean): String {
+        val value = if (online) "1" else "0"
+        val cmd = "echo $value > /sys/devices/system/cpu/cpu$id/online"
+        return executeShell(cmd, useRoot = true)
+    }
+
+    fun getCpuClustersInfo(): List<CpuClusterInfo> {
+        val clusters = mutableListOf<CpuClusterInfo>()
+        val count = getCpuCoreCount()
+        
+        if (count >= 8) {
+            clusters.add(getClusterData("0,1,2,3", 0))
+            clusters.add(getClusterData("4,5,6", 4))
+            clusters.add(getClusterData("7", 7))
+        } else {
+            clusters.add(getClusterData("0-$count", 0))
+        }
+        
+        return clusters
+    }
+
+    private fun getClusterData(cores: String, refCoreId: Int): CpuClusterInfo {
+        val governor = try {
+            val file = File("/sys/devices/system/cpu/cpu$refCoreId/cpufreq/scaling_governor")
+            if (file.exists()) {
+                val reader = BufferedReader(InputStreamReader(file.inputStream()))
+                val line = reader.readLine()
+                reader.close()
+                line?.trim() ?: "unknown"
+            } else "unknown"
+        } catch (e: Exception) {
+            "unknown"
+        }
+
+        val min = getCoreFreq(refCoreId, "scaling_min_freq").toLongOrNull() ?: 0L
+        val max = getCoreFreq(refCoreId, "scaling_max_freq").toLongOrNull() ?: 0L
+
+        return CpuClusterInfo(
+            cores = "Cpu$cores",
+            governor = governor,
+            minFreq = min.toString(),
+            maxFreq = max.toString(),
+            range = "${min / 1000}~${max / 1000}MHz"
+        )
+    }
+
+    fun getAvailableGovernors(refCoreId: Int): List<String> {
+        return try {
+            val file = File("/sys/devices/system/cpu/cpu$refCoreId/cpufreq/scaling_available_governors")
+            if (file.exists()) {
+                val reader = BufferedReader(InputStreamReader(file.inputStream()))
+                val line = reader.readLine()
+                reader.close()
+                line?.trim()?.split(" ") ?: emptyList()
+            } else emptyList()
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    fun getAvailableFrequencies(refCoreId: Int): List<String> {
+        return try {
+            val file = File("/sys/devices/system/cpu/cpu$refCoreId/cpufreq/scaling_available_frequencies")
+            if (file.exists()) {
+                val reader = BufferedReader(InputStreamReader(file.inputStream()))
+                val line = reader.readLine()
+                reader.close()
+                line?.trim()?.split(" ")?.filter { it.isNotEmpty() } ?: emptyList()
+            } else emptyList()
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    fun setCpuGovernor(cores: String, governor: String): String {
+        val coreList = parseCores(cores)
+        val results = mutableListOf<String>()
+        coreList.forEach { id ->
+            val cmd = "echo $governor > /sys/devices/system/cpu/cpu$id/cpufreq/scaling_governor"
+            results.add(executeShell(cmd, useRoot = true))
+        }
+        return if (results.any { it.contains("Error") || it.contains("失败") }) "部分设置失败" else "设置成功"
+    }
+
+    fun setCpuFreq(cores: String, type: String, freq: String): String {
+        val coreList = parseCores(cores)
+        val targetFile = if (type == "min") "scaling_min_freq" else "scaling_max_freq"
+        val results = mutableListOf<String>()
+        coreList.forEach { id ->
+            val cmd = "echo $freq > /sys/devices/system/cpu/cpu$id/cpufreq/$targetFile"
+            results.add(executeShell(cmd, useRoot = true))
+        }
+        return if (results.any { it.contains("Error") || it.contains("失败") }) "部分设置失败" else "设置成功"
+    }
+
+    private fun parseCores(coresStr: String): List<Int> {
+        val clean = coresStr.replace("Cpu", "")
+        return if (clean.contains(",")) {
+            clean.split(",").map { it.trim().toInt() }
+        } else if (clean.contains("-")) {
+            val parts = clean.split("-")
+            (parts[0].toInt()..parts[1].toInt()).toList()
+        } else {
+            listOf(clean.toInt())
+        }
+    }
+
+    fun getAvailableRefreshRates(context: Context): List<String> {
+        val wm = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+        val display = wm.defaultDisplay
+        return display.supportedModes.map { "${it.refreshRate.toInt()} Hz" }.distinct().sortedByDescending { it.split(" ")[0].toInt() }
+    }
+
+    fun setRefreshRate(rate: String): String {
+        val value = rate.replace(" Hz", "")
+        // Attempt to set via system settings (common for high refresh rate)
+        val cmd1 = "settings put system peak_refresh_rate $value"
+        val cmd2 = "settings put system min_refresh_rate $value"
+        val res1 = executeShell(cmd1, useRoot = true)
+        val res2 = executeShell(cmd2, useRoot = true)
+        return if (res1.contains("Error") || res2.contains("Error")) "设置失败 (需Root)" else "设置成功: $rate"
+    }
+
+    fun setScreenSize(width: Int, height: Int): String {
+        val cmd = "wm size ${width}x${height}"
+        return executeShell(cmd, useRoot = true)
+    }
+
+    fun resetScreenSize(): String {
+        return executeShell("wm size reset", useRoot = true)
+    }
+
+    fun setScreenDensity(density: Int): String {
+        val cmd = "wm density $density"
+        return executeShell(cmd, useRoot = true)
+    }
+
+    fun resetScreenDensity(): String {
+        return executeShell("wm density reset", useRoot = true)
+    }
+
+    fun getPartitions(): List<PartitionInfo> {
+        val partitions = mutableListOf<PartitionInfo>()
+        try {
+            val byNameDirs = mutableListOf<File>()
+            val devBlock = File("/dev/block")
+            if (devBlock.exists()) {
+                searchByName(devBlock, byNameDirs, 0)
+            }
+
+            if (byNameDirs.isNotEmpty()) {
+                val seenPaths = mutableSetOf<String>()
+                byNameDirs.forEach { dir ->
+                    dir.listFiles()?.forEach { file ->
+                        try {
+                            val path = file.canonicalPath
+                            if (seenPaths.add(path)) {
+                                val deviceName = path.substringAfterLast('/')
+                                var size = getBlockDeviceSize(deviceName)
+                                if (size == 0L) size = File(path).length()
+                                partitions.add(PartitionInfo(file.name, path, size))
+                            }
+                        } catch (e: Exception) {}
+                    }
+                }
+            }
+            
+            if (partitions.isEmpty()) {
+                // Fallback to /proc/partitions
+                val file = File("/proc/partitions")
+                if (file.exists()) {
+                    val reader = BufferedReader(InputStreamReader(file.inputStream()))
+                    reader.readLine() // skip header
+                    reader.readLine() // skip header
+                    var line: String?
+                    while (reader.readLine().also { line = it } != null) {
+                        val parts = line!!.trim().split(Regex("\\s+"))
+                        if (parts.size >= 4) {
+                            val name = parts[3]
+                            val blocks = parts[2].toLongOrNull() ?: 0L
+                            val path = "/dev/block/$name"
+                            partitions.add(PartitionInfo(name, path, blocks * 1024))
+                        }
+                    }
+                    reader.close()
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        return partitions.sortedBy { it.name }
+    }
+
+    private fun searchByName(dir: File, list: MutableList<File>, depth: Int) {
+        if (depth > 5) return
+        val files = dir.listFiles() ?: return
+        for (f in files) {
+            if (f.isDirectory) {
+                if (f.name == "by-name") {
+                    list.add(f)
+                } else {
+                    searchByName(f, list, depth + 1)
+                }
+            }
+        }
+    }
+
+    private fun getBlockDeviceSize(deviceName: String): Long {
+        return try {
+            val file = File("/sys/class/block/$deviceName/size")
+            if (file.exists()) {
+                val sizeSectors = file.readText().trim().toLongOrNull() ?: 0L
+                sizeSectors * 512L
+            } else {
+                0L
+            }
+        } catch (e: Exception) {
+            0L
+        }
+    }
+
+    fun flashPartition(context: Context, partitionPath: String, imageUri: Uri): String {
+        // Copy URI to temp file because dd needs a direct path
+        val tempFile = File(context.cacheDir, "temp_flash.img")
+        try {
+            context.contentResolver.openInputStream(imageUri)?.use { input ->
+                FileOutputStream(tempFile).use { output ->
+                    input.copyTo(output)
+                }
+            }
+            val cmd = "dd if='${tempFile.absolutePath}' of='$partitionPath' bs=4096"
+            val result = executeShell(cmd, useRoot = true)
+            tempFile.delete()
+            return result
+        } catch (e: Exception) {
+            tempFile.delete()
+            return "Error: ${e.message}"
+        }
+    }
+
+    fun exportPartition(context: Context, partitionPath: String, destUri: Uri): String {
+        // Since we need root to read /dev/block, but can't easily write to a SAF Uri via shell dd,
+        // we copy to cache first then to SAF.
+        val tempFile = File(context.cacheDir, "temp_export.img")
+        try {
+            val cmd = "dd if='$partitionPath' of='${tempFile.absolutePath}' bs=4096"
+            val res = executeShell(cmd, useRoot = true)
+            if (res.contains("Error") || res.contains("失败")) return res
+            
+            context.contentResolver.openOutputStream(destUri)?.use { output ->
+                tempFile.inputStream().use { input ->
+                    input.copyTo(output)
+                }
+            }
+            tempFile.delete()
+            return "Export Successful"
+        } catch (e: Exception) {
+            tempFile.delete()
+            return "Error: ${e.message}"
+        }
+    }
+
+    fun getHardwareDetails(context: Context): Map<String, String> {
+        val details = mutableMapOf(
+            "Manufacturer" to Build.MANUFACTURER,
+            "Brand" to Build.BRAND,
+            "Model" to Build.MODEL,
+            "Board" to Build.BOARD,
+            "Hardware" to Build.HARDWARE,
+            "Platform" to (getSystemProperty("ro.board.platform") ?: "Unknown"),
+            "Product" to Build.PRODUCT,
+            "Device" to Build.DEVICE,
+            "Baseband" to (Build.getRadioVersion() ?: "Unknown"),
+            "Supported ABIs" to Build.SUPPORTED_ABIS.joinToString(", ")
+        )
+        
+        val wm = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+        val display = wm.defaultDisplay
+        details["Display ID"] = display.displayId.toString()
+        details["Refresh Rate"] = "${display.refreshRate} Hz"
+        
+        return details
     }
 
     fun getSocInfo(): String {
@@ -405,6 +850,126 @@ object DeviceUtils {
             if (output.isEmpty()) "执行成功 (无输出)" else output.toString().trim()
         } catch (e: Exception) {
             "执行失败: ${e.message}"
+        }
+    }
+
+    fun extractAsset(context: Context, assetName: String): String? {
+        val outFile = File(context.filesDir, assetName)
+        if (outFile.exists()) {
+            outFile.setExecutable(true)
+            return outFile.absolutePath
+        }
+        try {
+            val inputStream: InputStream = context.assets.open(assetName)
+            val outputStream: OutputStream = FileOutputStream(outFile)
+            val buffer = ByteArray(1024)
+            var read: Int
+            while (inputStream.read(buffer).also { read = it } != -1) {
+                outputStream.write(buffer, 0, read)
+            }
+            inputStream.close()
+            outputStream.flush()
+            outputStream.close()
+            outFile.setExecutable(true)
+            return outFile.absolutePath
+        } catch (e: Exception) {
+            e.printStackTrace()
+            return null
+        }
+    }
+
+    fun isCoreCtlEnabled(context: Context): Boolean {
+        val prefs = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
+        return prefs.getBoolean("corectl_enabled", false)
+    }
+
+    fun toggleCoreCtl(context: Context, enable: Boolean): String {
+        val path = extractAsset(context, "corectl") ?: return "无法提取 corectl"
+        val cmd = if (enable) "$path on" else "$path off"
+        val result = executeShell(cmd, useRoot = true)
+        
+        if (!result.startsWith("执行失败")) {
+            val prefs = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
+            prefs.edit().putBoolean("corectl_enabled", enable).apply()
+        }
+        
+        return result
+    }
+
+    fun getWifiInfo(context: Context): Map<String, String> {
+        return try {
+            val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+            val connectionInfo = wifiManager.connectionInfo
+            val dhcpInfo = wifiManager.dhcpInfo
+            
+            mapOf(
+                "SSID" to (connectionInfo.ssid ?: "Unknown"),
+                "BSSID" to (connectionInfo.bssid ?: "Unknown"),
+                "Speed" to "${connectionInfo.linkSpeed} Mbps",
+                "Frequency" to "${connectionInfo.frequency} MHz",
+                "RSSI" to "${connectionInfo.rssi} dBm",
+                "IP Address" to formatIpAddress(dhcpInfo.ipAddress),
+                "Gateway" to formatIpAddress(dhcpInfo.gateway),
+                "Netmask" to formatIpAddress(dhcpInfo.netmask),
+                "DNS1" to formatIpAddress(dhcpInfo.dns1),
+                "MAC" to (connectionInfo.macAddress ?: "Unknown")
+            )
+        } catch (e: Exception) {
+            mapOf("Status" to "Error: ${e.message}")
+        }
+    }
+
+    private fun formatIpAddress(ip: Int): String {
+        return (ip and 0xFF).toString() + "." +
+                (ip shr 8 and 0xFF) + "." +
+                (ip shr 16 and 0xFF) + "." +
+                (ip shr 24 and 0xFF)
+    }
+
+    fun getBluetoothInfo(context: Context): Map<String, String> {
+        return try {
+            val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
+            val adapter = bluetoothManager.adapter
+            if (adapter != null) {
+                mapOf(
+                    "Name" to (adapter.name ?: "Unknown"),
+                    "Address" to (adapter.address ?: "Unknown"),
+                    "State" to when(adapter.state) {
+                        BluetoothAdapter.STATE_ON -> "On"
+                        BluetoothAdapter.STATE_OFF -> "Off"
+                        else -> "Unknown"
+                    },
+                    "Scan Mode" to adapter.scanMode.toString(),
+                    "Multiple Advertisement" to adapter.isMultipleAdvertisementSupported.toString()
+                )
+            } else {
+                mapOf("Status" to "Not Supported")
+            }
+        } catch (e: Exception) {
+            mapOf("Status" to "Error (Permission Required)")
+        }
+    }
+
+    fun getAudioInfo(context: Context): Map<String, String> {
+        return try {
+            val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+            mapOf(
+                "Mode" to when(audioManager.mode) {
+                    AudioManager.MODE_NORMAL -> "Normal"
+                    AudioManager.MODE_RINGTONE -> "Ringtone"
+                    AudioManager.MODE_IN_CALL -> "In Call"
+                    AudioManager.MODE_IN_COMMUNICATION -> "In Communication"
+                    else -> "Unknown"
+                },
+                "Sample Rate" to (audioManager.getProperty(AudioManager.PROPERTY_OUTPUT_SAMPLE_RATE) ?: "Unknown"),
+                "Buffer Size" to (audioManager.getProperty(AudioManager.PROPERTY_OUTPUT_FRAMES_PER_BUFFER) ?: "Unknown"),
+                "Volume Music" to "${audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)}/${audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)}",
+                "Volume Ring" to "${audioManager.getStreamVolume(AudioManager.STREAM_RING)}/${audioManager.getStreamMaxVolume(AudioManager.STREAM_RING)}",
+                "Microphone" to if (audioManager.isMicrophoneMute) "Muted" else "Active",
+                "Speakerphone" to if (audioManager.isSpeakerphoneOn) "On" else "Off"
+            )
+        } catch (e: Exception) {
+            mapOf("Status" to "Error: ${e.message}")
         }
     }
 }

@@ -60,6 +60,13 @@ fun SettingsScreen(
     currentLanguage: String,
     onLanguageChange: (String) -> Unit
 ) {
+    var showBroadcast by remember { mutableStateOf(false) }
+
+    if (showBroadcast) {
+        BroadcastScreen(onBack = { showBroadcast = false })
+        return
+    }
+
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     val uriHandler = LocalUriHandler.current
 
@@ -119,6 +126,20 @@ fun SettingsScreen(
                 TerminalCard()
 
                 InfoCard(
+                    title = Strings.get("tab_broadcast"),
+                    icon = Icons.Default.Settings,
+                    content = {
+                        Column(modifier = Modifier.padding(8.dp)) {
+                            LinkItem(
+                                title = Strings.get("tab_broadcast"),
+                                subtitle = Strings.get("broadcast_desc"),
+                                onClick = { showBroadcast = true }
+                            )
+                        }
+                    }
+                )
+
+                InfoCard(
                     title = Strings.get("about"),
                     icon = Icons.Default.Info,
                     content = {
@@ -151,9 +172,7 @@ fun LanguageSelectionGroup(
 ) {
     val languageOptions = listOf(
         "zh" to "中文 (简体)",
-        "en" to "English",
-        "ja" to "日本語",
-        "ru" to "Русский"
+        "en" to "English"
     )
 
     Column(Modifier.selectableGroup()) {
