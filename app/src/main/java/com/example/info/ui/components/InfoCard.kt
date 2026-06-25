@@ -75,10 +75,12 @@ fun InfoListItem(
     headline: String,
     supporting: String,
     icon: ImageVector,
+    modifier: Modifier = Modifier,
     iconTint: Color = MaterialTheme.colorScheme.onSurfaceVariant,
     trailingContent: @Composable (() -> Unit)? = null
 ) {
     ListItem(
+        modifier = modifier,
         headlineContent = {
             Text(
                 text = headline,

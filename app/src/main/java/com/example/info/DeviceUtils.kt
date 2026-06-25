@@ -513,6 +513,57 @@ object DeviceUtils {
         return executeShell("wm density reset", useRoot = true)
     }
 
+    fun getScreenOffTimeout(context: Context): Int {
+        return try {
+            Settings.System.getInt(context.contentResolver, Settings.System.SCREEN_OFF_TIMEOUT)
+        } catch (e: Exception) {
+            15000
+        }
+    }
+
+    fun setScreenOffTimeout(timeoutMs: Int): String {
+        val cmd = "settings put system screen_off_timeout $timeoutMs"
+        return executeShell(cmd, useRoot = true)
+    }
+
+    fun setSmallestWidth(context: Context, sw: Int): String {
+        val wm = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+        val display = wm.defaultDisplay
+        val size = Point()
+        display.getRealSize(size)
+        val width = Math.min(size.x, size.y)
+        val density = (width * 160) / sw
+        return setScreenDensity(density)
+    }
+
+    fun getHDRStatus(): Boolean {
+        // Generic check for HDR force property or similar. 
+        // This varies greatly by device. Using a common property if found.
+        val res = executeShell("getprop persist.sys.sf.hdr_force", useRoot = true).trim()
+        return res == "1"
+    }
+
+    fun setHDR(enabled: Boolean): String {
+        val value = if (enabled) "1" else "0"
+        // Try multiple common ways to set HDR
+        executeShell("settings put system hdr_enable $value", useRoot = true)
+        executeShell("settings put global hdr_output_mode $value", useRoot = true)
+        return executeShell("setprop persist.sys.sf.hdr_force $value", useRoot = true)
+    }
+
+    fun getBrightnessRange(context: Context): String {
+        return try {
+            val maxBrightness = executeShell("cat /sys/class/backlight/*/max_brightness", useRoot = true).trim()
+            if (maxBrightness.isNotEmpty() && !maxBrightness.contains("Error")) {
+                "0 - $maxBrightness"
+            } else {
+                "0 - 255 (默认)"
+            }
+        } catch (e: Exception) {
+            "0 - 255"
+        }
+    }
+
     fun getPartitions(): List<PartitionInfo> {
         val partitions = mutableListOf<PartitionInfo>()
         try {
@@ -971,5 +1022,37 @@ object DeviceUtils {
         } catch (e: Exception) {
             mapOf("Status" to "Error: ${e.message}")
         }
+    }
+
+    // --- System Control Methods ---
+
+    fun setWifiEnabled(enabled: Boolean): String {
+        val cmd = if (enabled) "svc wifi enable" else "svc wifi disable"
+        return executeShell(cmd, useRoot = true)
+    }
+
+    fun setBluetoothEnabled(enabled: Boolean): String {
+        val cmd = if (enabled) "svc bluetooth enable" else "svc bluetooth disable"
+        return executeShell(cmd, useRoot = true)
+    }
+
+    fun setNfcEnabled(enabled: Boolean): String {
+        val cmd = if (enabled) "svc nfc enable" else "svc nfc disable"
+        return executeShell(cmd, useRoot = true)
+    }
+
+    fun setLocationEnabled(enabled: Boolean): String {
+        val cmd = if (enabled) "cmd location set-location-enabled true" else "cmd location set-location-enabled false"
+        return executeShell(cmd, useRoot = true)
+    }
+
+    fun setSystemSetting(table: String, key: String, value: String): String {
+        val cmd = "settings put $table $key $value"
+        return executeShell(cmd, useRoot = true)
+    }
+
+    fun getSystemSetting(table: String, key: String): String {
+        val cmd = "settings get $table $key"
+        return executeShell(cmd, useRoot = true).trim()
     }
 }

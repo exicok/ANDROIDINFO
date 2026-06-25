@@ -52,6 +52,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.info.ui.viewmodel.SettingsViewModel
+import androidx.compose.runtime.collectAsState
+import com.example.info.ui.components.InfoListItem
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun SettingsScreen(
@@ -60,6 +65,18 @@ fun SettingsScreen(
     currentLanguage: String,
     onLanguageChange: (String) -> Unit
 ) {
+    val settingsViewModel: SettingsViewModel = viewModel()
+    
+    val wifiEnabled by settingsViewModel.wifiEnabled.collectAsState()
+    val btEnabled by settingsViewModel.btEnabled.collectAsState()
+    val nfcEnabled by settingsViewModel.nfcEnabled.collectAsState()
+    val gpsEnabled by settingsViewModel.gpsEnabled.collectAsState()
+    
+    val battPercent by settingsViewModel.battPercent.collectAsState()
+    val networkTraffic by settingsViewModel.networkTraffic.collectAsState()
+    val doubleTapSleep by settingsViewModel.doubleTapSleep.collectAsState()
+    val adbNetwork by settingsViewModel.adbNetwork.collectAsState()
+
     var showBroadcast by remember { mutableStateOf(false) }
 
     if (showBroadcast) {

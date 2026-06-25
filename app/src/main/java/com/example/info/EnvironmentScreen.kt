@@ -19,6 +19,16 @@ import android.os.BatteryManager
 import android.os.Build
 import android.view.Surface
 import android.view.TextureView
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.info.battery.BatteryViewModel
+import com.example.info.battery.BatteryInfoType
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.runtime.collectAsState
+import com.example.info.ui.viewmodel.ScreenViewModel
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.material3.Switch
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.background
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.viewinterop.AndroidView
@@ -52,6 +62,8 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material.icons.filled.Highlight
 import androidx.compose.material3.AlertDialog
 import android.opengl.Matrix
 import android.opengl.GLES20
@@ -653,13 +665,17 @@ fun HardwareTab(context: Context) {
 
 @Composable
 fun ScreenTab(context: Context) {
-    val info = DeviceUtils.getScreenInfo(context)
+    val viewModel: ScreenViewModel = viewModel()
+    val info by viewModel.screenInfo.collectAsState()
+    val screenTimeout by viewModel.screenTimeout.collectAsState()
+    
     val scope = rememberCoroutineScope()
-    val snackbarHostState = remember { SnackbarHostState() } // Pager might need its own or shared
     
     var showResDialog by remember { mutableStateOf(false) }
     var showDpiDialog by remember { mutableStateOf(false) }
+    var showSWDialog by remember { mutableStateOf(false) }
     var showRefreshDialog by remember { mutableStateOf(false) }
+    var showTimeoutDialog by remember { mutableStateOf(false) }
 
     InfoCard(
         title = Strings.get("tab_screen"),
@@ -698,6 +714,32 @@ fun ScreenTab(context: Context) {
                 }
             )
             HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+            // Smallest Width (dp) modification
+            InfoListItem(
+                headline = Strings.get("screen_sw"),
+                supporting = "${(info["resolution"]?.split(" x ")?.get(0)?.toIntOrNull() ?: 0) * 160 / (info["density"]?.split(" ")?.get(0)?.toIntOrNull() ?: 1)} dp",
+                icon = Icons.Default.Info,
+                trailingContent = {
+                    TextButton(onClick = { showSWDialog = true }) {
+                        Text(Strings.get("change_sw"))
+                    }
+                }
+            )
+            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+            // Screen Timeout modification
+            InfoListItem(
+                headline = Strings.get("screen_timeout"),
+                supporting = formatTimeout(screenTimeout),
+                icon = Icons.Default.Timer,
+                trailingContent = {
+                    TextButton(onClick = { showTimeoutDialog = true }) {
+                        Text(Strings.get("change_timeout"))
+                    }
+                }
+            )
+            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+            InfoListItem(headline = Strings.get("brightness_range"), supporting = info["brightness_range"] ?: "N/A", icon = Icons.Default.Info)
+            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
             InfoListItem(headline = Strings.get("screen_size"), supporting = info["size"] ?: "N/A", icon = Icons.Default.Info)
             HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
             InfoListItem(headline = Strings.get("screen_xdpi"), supporting = info["xdpi_ydpi"] ?: "N/A", icon = Icons.Default.Info)
@@ -730,36 +772,23 @@ fun ScreenTab(context: Context) {
     if (showResDialog) {
         ResolutionInputDialog(
             onDismiss = { showResDialog = false },
-            onConfirm = { w, h ->
-                scope.launch {
-                    DeviceUtils.setScreenSize(w, h)
-                    showResDialog = false
-                }
-            },
-            onReset = {
-                scope.launch {
-                    DeviceUtils.resetScreenSize()
-                    showResDialog = false
-                }
-            }
+            onConfirm = { w, h -> viewModel.setResolution(w, h); showResDialog = false },
+            onReset = { viewModel.resetResolution(); showResDialog = false }
         )
     }
 
     if (showDpiDialog) {
         DpiInputDialog(
             onDismiss = { showDpiDialog = false },
-            onConfirm = { dpi ->
-                scope.launch {
-                    DeviceUtils.setScreenDensity(dpi)
-                    showDpiDialog = false
-                }
-            },
-            onReset = {
-                scope.launch {
-                    DeviceUtils.resetScreenDensity()
-                    showDpiDialog = false
-                }
-            }
+            onConfirm = { dpi -> viewModel.setDensity(dpi); showDpiDialog = false },
+            onReset = { viewModel.resetDensity(); showDpiDialog = false }
+        )
+    }
+
+    if (showSWDialog) {
+        SWInputDialog(
+            onDismiss = { showSWDialog = false },
+            onConfirm = { sw -> viewModel.setSmallestWidth(sw); showSWDialog = false }
         )
     }
 
@@ -770,14 +799,55 @@ fun ScreenTab(context: Context) {
             options = rates,
             selectedOption = info["refresh_rate"] ?: "",
             onDismiss = { showRefreshDialog = false },
+            onSelect = { selected -> viewModel.setRefreshRate(selected); showRefreshDialog = false }
+        )
+    }
+
+    if (showTimeoutDialog) {
+        val options = listOf(15000, 30000, 60000, 120000, 300000, 600000, 1800000, -1)
+        SelectionDialog(
+            title = Strings.get("change_timeout"),
+            options = options.map { formatTimeout(it) },
+            selectedOption = formatTimeout(screenTimeout),
+            onDismiss = { showTimeoutDialog = false },
             onSelect = { selected ->
-                scope.launch {
-                    DeviceUtils.setRefreshRate(selected)
-                    showRefreshDialog = false
-                }
+                val index = options.map { formatTimeout(it) }.indexOf(selected)
+                if (index != -1) viewModel.setScreenTimeout(options[index])
+                showTimeoutDialog = false
             }
         )
     }
+}
+
+private fun formatTimeout(ms: Int): String {
+    if (ms == -1 || ms > 100000000) return Strings.getStatic("timeout_never") // settings put sometimes uses very large value
+    val seconds = ms / 1000
+    if (seconds < 60) return "$seconds ${Strings.getStatic("timeout_seconds")}"
+    val minutes = seconds / 60
+    return "$minutes ${Strings.getStatic("timeout_minutes")}"
+}
+
+@Composable
+fun SWInputDialog(onDismiss: () -> Unit, onConfirm: (Int) -> Unit) {
+    var sw by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(Strings.get("change_sw")) },
+        text = {
+            OutlinedTextField(
+                value = sw,
+                onValueChange = { sw = it },
+                label = { Text("dp") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+            )
+        },
+        confirmButton = {
+            Button(onClick = { sw.toIntOrNull()?.let { onConfirm(it) } }) { Text(Strings.get("apply")) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(Strings.get("close")) }
+        }
+    )
 }
 
 @Composable
@@ -917,6 +987,7 @@ fun CameraTab(context: Context) {
 fun GraphicsTab(context: Context) {
     var rendererInfo by remember { mutableStateOf("Loading...") }
     var vendorInfo by remember { mutableStateOf("Loading...") }
+    var driverInfo by remember { mutableStateOf("Loading...") }
 
     InfoCard(
         title = Strings.get("gpu_info"),
@@ -925,6 +996,8 @@ fun GraphicsTab(context: Context) {
             InfoListItem(headline = Strings.get("gpu_renderer"), supporting = rendererInfo, icon = Icons.Default.Info)
             HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
             InfoListItem(headline = Strings.get("gpu_vendor"), supporting = vendorInfo, icon = Icons.Default.Info)
+            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+            InfoListItem(headline = Strings.get("gpu_driver"), supporting = driverInfo, icon = Icons.Default.Info)
             HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
             InfoListItem(headline = Strings.get("opengl_version"), supporting = DeviceUtils.getGlEsVersion(context), icon = Icons.Default.Info)
             HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
@@ -951,6 +1024,7 @@ fun GraphicsTab(context: Context) {
                                     cube = Cube()
                                     rendererInfo = GLES20.glGetString(GLES20.GL_RENDERER) ?: "Unknown"
                                     vendorInfo = GLES20.glGetString(GLES20.GL_VENDOR) ?: "Unknown"
+                                    driverInfo = GLES20.glGetString(GLES20.GL_VERSION) ?: "Unknown"
                                     
                                     // Update BroadcastManager for PC version
                                     BroadcastManager.gpuRenderer = rendererInfo
@@ -1230,49 +1304,80 @@ fun SensorsTab(context: Context) {
 
 @Composable
 fun BatteryTab(context: Context) {
-    val batteryIntent = DeviceUtils.getBatteryIntent(context)
-    val status = batteryIntent?.getIntExtra(BatteryManager.EXTRA_STATUS, -1) ?: -1
-    val health = batteryIntent?.getIntExtra(BatteryManager.EXTRA_HEALTH, -1) ?: -1
-    val level = batteryIntent?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
-    val scale = batteryIntent?.getIntExtra(BatteryManager.EXTRA_SCALE, -1) ?: -1
-    val batteryPct = if (level != -1 && scale != -1) (level / scale.toFloat() * 100).toInt() else -1
-    val voltage = batteryIntent?.getIntExtra(BatteryManager.EXTRA_VOLTAGE, -1) ?: -1
-    val temp = batteryIntent?.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, -1) ?: -1
-    val tech = batteryIntent?.getStringExtra(BatteryManager.EXTRA_TECHNOLOGY) ?: "Unknown"
+    val viewModel: BatteryViewModel = viewModel()
+    val batteryInfos by viewModel.batteryInfos.collectAsState()
+    val isRoot by viewModel.isRoot.collectAsState()
+    val isCelsius by viewModel.isCelsius.collectAsState(initial = true)
+    val isDualBatt by viewModel.isDualBatt.collectAsState(initial = false)
+    val showOplus by viewModel.showOplus.collectAsState(initial = true)
 
-    val healthStr = when (health) {
-        BatteryManager.BATTERY_HEALTH_GOOD -> "Good"
-        BatteryManager.BATTERY_HEALTH_OVERHEAT -> "Overheat"
-        BatteryManager.BATTERY_HEALTH_DEAD -> "Dead"
-        BatteryManager.BATTERY_HEALTH_OVER_VOLTAGE -> "Over Voltage"
-        BatteryManager.BATTERY_HEALTH_UNSPECIFIED_FAILURE -> "Failure"
-        BatteryManager.BATTERY_HEALTH_COLD -> "Cold"
-        else -> "Unknown"
-    }
-
-    val statusStr = when (status) {
-        BatteryManager.BATTERY_STATUS_CHARGING -> "Charging"
-        BatteryManager.BATTERY_STATUS_DISCHARGING -> "Discharging"
-        BatteryManager.BATTERY_STATUS_FULL -> "Full"
-        BatteryManager.BATTERY_STATUS_NOT_CHARGING -> "Not Charging"
-        else -> "Unknown"
-    }
+    val batteryLevelInfo = batteryInfos.find { it.type == BatteryInfoType.LEVEL }
+    val batteryPct = batteryLevelInfo?.value?.removeSuffix("%")?.toIntOrNull() ?: -1
 
     BatteryCard(batteryLevel = batteryPct)
 
     InfoCard(
-        title = Strings.get("tab_battery"),
+        title = Strings.get("tab_battery") + if (isRoot) " (Root)" else "",
         icon = Icons.Default.Phone,
         content = {
-            InfoListItem(headline = Strings.get("battery_status"), supporting = "$statusStr ($healthStr)", icon = Icons.Default.Info)
-            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-            InfoListItem(headline = Strings.get("battery_tech"), supporting = tech, icon = Icons.Default.Info)
-            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-            InfoListItem(headline = Strings.get("battery_voltage"), supporting = "${voltage} mV", icon = Icons.Default.Info)
-            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-            InfoListItem(headline = Strings.get("battery_temp"), supporting = "${temp / 10f} °C", icon = Icons.Default.Info)
+            batteryInfos.forEachIndexed { index, info ->
+                val title = info.customTitle ?: Strings.get(info.type.stringKey)
+                InfoListItem(
+                    headline = title,
+                    supporting = info.value,
+                    icon = Icons.Default.Info
+                )
+                if (index < batteryInfos.size - 1) {
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                }
+            }
         }
     )
+
+    InfoCard(
+        title = Strings.get("battery_settings"),
+        icon = Icons.Default.Settings,
+        content = {
+            SettingsToggleItem(
+                title = Strings.get("temp_unit_celsius"),
+                checked = isCelsius,
+                onCheckedChange = { viewModel.setIsCelsius(it) }
+            )
+            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+            SettingsToggleItem(
+                title = Strings.get("dual_battery"),
+                checked = isDualBatt,
+                onCheckedChange = { viewModel.setDualBatt(it) }
+            )
+            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+            SettingsToggleItem(
+                title = Strings.get("show_oplus_fields"),
+                checked = showOplus,
+                onCheckedChange = { viewModel.setShowOplus(it) }
+            )
+            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+            InfoListItem(
+                headline = Strings.get("custom_battery_info"),
+                supporting = "Add/Remove custom sysfs paths",
+                icon = Icons.Default.Build,
+                modifier = Modifier.clickable { /* TODO: Show Manage Entries Dialog */ }
+            )
+        }
+    )
+}
+
+@Composable
+fun SettingsToggleItem(title: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(text = title, style = MaterialTheme.typography.bodyLarge)
+        androidx.compose.material3.Switch(checked = checked, onCheckedChange = onCheckedChange)
+    }
 }
 
 @Composable
